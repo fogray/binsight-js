@@ -1,180 +1,107 @@
-var InsApmBi = {
-    appId: '',
-    postUrl: 'http://tag.xinshangmeng.com/v2',
-    
-    addListener: function(obj, type, fn) {
-        if (obj.addEventListener) {
-            obj.addEventListener(type, fn, false);
-        } else if (obj.attachEvent) {
-            obj.attachEvent( "on" + type, fn );
-        }
-    },
-    //字符串转换成字节数
-    str2Byte: function(str){
-        if (!str) return 0;
-        var len = str.length, bytes = 0;
-        for (var i = 0; i < len; i++) {
-            str.charCodeAt(i)>255 ? bytes += 2 : bytes += 1;
-        }
-        return bytes;
-    },
-    //url清除参数
-    clearUrlParam: function(url) {
-        if (!url) return null;
-        var urls = url.split('?');
-        var param = urls[1];
-        if (param && param.indexOf('method') == 0) {
-            var u = urls[0]+'/'+param.split('&')[0].split('=')[1];
-            return u.substring(u.length-255);
-        } else {
-            return urls[0].substring(urls[0].length-255);
-        }
-    },
-    //推送监听数据到监听服务
-    post_data: function(url, params){
-        var fn = function(){
-            APM_SENDER.corsSend(url, params);
-        };
-        if (window.setImmediate) {
-            window.setImmediate(fn);
-        } else if (window.msSetImmediate) {
-            window.msSetImmediate(fn);
-        } else if (window.webkitSetImmediate) {
-            window.webkitSetImmediate(fn);
-        } else if (window.mozSetImmediate) {
-            window.mozSetImmediate(fn);
-        } else {
-            setTimeout(fn, 10);
-        }
-    }
-};
-
-var APM_SENDER = {
-    is_complete: true,
-    corsSend: function(url, params) {
-    	try{
-	        var xhr = new XMLHttpRequest();
-	        if (! 'withCredentials' in xhr) {
-	            xhr = XDomainRequest();
-	        }
-	        if (!xhr) return;
-	        xhr.open('POST', url, true);
-	        if ('setRequestHeader' in xhr) {
-		        xhr.setRequestHeader("Content-type","application/x-www-form-urlencoded");
-		    }
-	        xhr.send(toParams(params));
-	        xhr.onload = function(){
-	        	if ('console' in window){
-	            	console.log(xhr.responseText);
-	        	}
-	        };
-		}catch(e){
-			if ('console' in window) {
-				console.log(e);
-			}
-		}
-        function toParams(params) {
-            var result = [];
-            var k=null;
-            for (k in params) {
-                if (params.hasOwnProperty(k)) {
-                    var type = Object.prototype.toString.call(params[k]);
-                    var v = '';
-                    if (type === "[object Array]" || type === '[object Object]') {
-                        v = (params[k]===undefined || params[k]===null ? "" : encodeURIComponent(JSON.stringify(params[k])));
-                    } else {
-                        v = (params[k]===undefined || params[k]===null ? "" : encodeURIComponent(params[k]));
-                    }
-                    result.push(k+'='+v);
-                }
-            }
-            if (result.length > 0) return result.join('&');
-            return null;
-        }
-    },
-    sendData: function(url, params) {
-        if (!this.is_complete) setTimeout('sendData('+url+','+params+')', 1000);
-        this.is_complete = false;
-        var form = document.createElement('form');
-        form.method = 'POST';
-        form.id = "beacon_form";
-        
-        form.enctype = "application/x-www-form-urlencoded";
-        
-        var k=null;
-        for (k in params) {
-            if (params.hasOwnProperty(k)) {
-                var input = document.createElement("input");
-                input.type = "hidden"; 
-                input.name = k;
-                var type = Object.prototype.toString.call(params[k]);
-                if (type === "[object Array]" || type === '[object Object]') {
-                    input.value = (params[k]===undefined || params[k]===null ? "" : encodeURIComponent(JSON.stringify(params[k])));
-                } else {
-                    input.value = (params[k]===undefined || params[k]===null ? "" : encodeURIComponent(params[k]));
-                }
-                form.appendChild(input);
-            }
-        }
-        
-        function remove(id) {
-            var el = document.getElementById(id);
-            if (el) {
-                el.parentNode.removeChild(el);
-            }
-        }
-        
-        function submit() {
-            var iframe, name = "insapm_post-" + encodeURIComponent(form.action) + "-" + Math.random();
-            
-            try {
-                iframe = document.createElement('<iframe name="' + name + '">');    // IE <= 8
-            } catch (e) {
-                iframe = document.createElement("iframe");
-            }
-            
-            form.action = url;
-            iframe.name = iframe.id = name;
-            
-            iframe.style.display = form.style.display = "none";
-            iframe.src="javascript:false";
-            
-            remove(iframe.id);
-            remove(form.id);
-            
-            if (document.body) {
-                document.body.appendChild(iframe);
-            }
-            var iFrmDocument = (iframe.contentWindow || iframe.contentDocument);
-            if (iFrmDocument.document) {
-                iFrmDocument = iFrmDocument.document;
-            }
-            if (iFrmDocument.body) {
-                iFrmDocument.body.appendChild(form);
-            }else {
-                iFrmDocument.appendChild(form);
-            }
-            try {
-                form.submit();
-            } catch (e) {
-            	alert(e);
-            }
-            
-            setTimeout(function() { remove(iframe.id);this.is_complete = true; }, 500);
-        }
-        
-        submit();
-    }
-};
-
 (function(){
     'use strict';
-	if (! 'performance' in window || ! 'timing' in window.performance ) {
+	if (!'performance' in window || !'timing' in window.performance ) {
 		return;
 	}
     //传输数据结构体
     var appId = INS_APM && 'info' in INS_APM && 'appId' in INS_APM.info ? INS_APM.info.appId : '';
     if (!appId && appId == '') return;
+    
+    var InsApmBi = {
+	    appId: '',
+	    postUrl: 'http://tag.xinshangmeng.com/v2',
+	    addListener: function(obj, type, fn) {
+	        if (obj.addEventListener) {
+	            obj.addEventListener(type, fn, false);
+	        } else if (obj.attachEvent) {
+	            obj.attachEvent( "on" + type, fn );
+	        }
+	    },
+	    //字符串转换成字节数
+	    str2Byte: function(str){
+	        if (!str) return 0;
+	        var len = str.length, bytes = 0;
+	        for (var i = 0; i < len; i++) {
+	            str.charCodeAt(i)>255 ? bytes += 2 : bytes += 1;
+	        }
+	        return bytes;
+	    },
+	    //url清除参数
+	    clearUrlParam: function(url) {
+	        if (!url) return null;
+	        var urls = url.split('?');
+	        var param = urls[1];
+	        if (param && param.indexOf('method') == 0) {
+	            var u = urls[0]+'/'+param.split('&')[0].split('=')[1];
+	            return u.substring(u.length-255);
+	        } else {
+	            return urls[0].substring(urls[0].length-255);
+	        }
+	    },
+	    //推送监听数据到监听服务
+	    post_data: function(url, params){
+	        var fn = function(){
+	            APM_SENDER.corsSend(url, params);
+	        };
+	        if (window.setImmediate) {
+	            window.setImmediate(fn);
+	        } else if (window.msSetImmediate) {
+	            window.msSetImmediate(fn);
+	        } else if (window.webkitSetImmediate) {
+	            window.webkitSetImmediate(fn);
+	        } else if (window.mozSetImmediate) {
+	            window.mozSetImmediate(fn);
+	        } else {
+	            setTimeout(fn, 10);
+	        }
+	    }
+	};
+	
+	var APM_SENDER = {
+	    is_complete: true,
+	    corsSend: function(url, params) {
+	    	try{
+		        var xhr = new XMLHttpRequest();
+		        if (! 'withCredentials' in xhr) {
+		            xhr = XDomainRequest();
+		        }
+		        if (!xhr) return;
+		        xhr.open('POST', url, true);
+		        if ('setRequestHeader' in xhr) {
+			        xhr.setRequestHeader("Content-type","application/x-www-form-urlencoded");
+			    }
+		        xhr.send(toParams(params));
+		        xhr.onload = function(){
+		        	if ('console' in window){
+		            	console.log(xhr.responseText);
+		        	}
+		        };
+			}catch(e){
+				if ('console' in window) {
+					console.log(e);
+				}
+			}
+	        function toParams(params) {
+	            var result = [];
+	            var k=null;
+	            for (k in params) {
+	                if (params.hasOwnProperty(k)) {
+	                    var type = Object.prototype.toString.call(params[k]);
+	                    var v = '';
+	                    if (type === "[object Array]" || type === '[object Object]') {
+	                        v = (params[k]===undefined || params[k]===null ? "" : encodeURIComponent(JSON.stringify(params[k])));
+	                    } else {
+	                        v = (params[k]===undefined || params[k]===null ? "" : encodeURIComponent(params[k]));
+	                    }
+	                    result.push(k+'='+v);
+	                }
+	            }
+	            if (result.length > 0) return result.join('&');
+	            return null;
+	        }
+	    }
+	};
+
     //客户端信息
     var clientInfo = getClientInfo();
     //页面信息
@@ -402,15 +329,16 @@ var APM_SENDER = {
     function errorListener(){
         window.onerror = function(msg, surl, lineNo, descr){
             var jerr = {};
+            var emsg = descr ? descr : JSON.stringify(msg);
             if (typeof msg == 'string' && typeof surl == 'string') {
                 jerr.error_file = InsApmBi.clearUrlParam(surl);
                 jerr.error_line = lineNo;
-                jerr.error_msg = msg.substring(msg.length-255);
+                jerr.error_msg = emsg.substring(emsg.length-255);
             } else if (typeof surl == 'object' && surl.ajax) {
                 surl = surl.ajax.url;
                 jerr.error_file = InsApmBi.clearUrlParam(surl);
                 jerr.error_line = lineNo;
-                jerr.error_msg = JSON.stringify(msg).substring(msg.length-255);
+                jerr.error_msg = emsg.substring(emsg.length-255);
             }
             //推送数据
             if (jerr && jerr.error_file) {
